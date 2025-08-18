@@ -138,12 +138,18 @@ class RingSegmentGenerator:
         msp.add_line(p1, p2)
         msp.add_line(p3, p4)
         
-        # Save to bytes
-        output = io.BytesIO()
-        doc.write(output)
-        output.seek(0)
+        # Save to temporary file then read back
+        # (ezdxf doesn't support direct BytesIO writing in all versions)
+        with tempfile.NamedTemporaryFile(suffix='.dxf', delete=False) as tmp:
+            doc.saveas(tmp.name)
+            tmp_path = tmp.name
         
-        return output.getvalue()
+        with open(tmp_path, 'rb') as f:
+            dxf_content = f.read()
+        
+        os.unlink(tmp_path)
+        
+        return dxf_content
     
     @staticmethod
     def create_pdf_drawing(units_data, project_info):
