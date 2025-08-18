@@ -271,47 +271,97 @@ class RingSegmentGenerator:
         c.saveState()
         c.translate(x_center, y_center)
         
-        # Draw segment
+        # Draw segment outline accurately
         c.setStrokeColor(black)
         c.setLineWidth(1)
         
-        # Calculate points
-        p1 = (inner_r, 0)
-        p2 = (outer_r, 0)
-        p3 = (outer_r * math.cos(angle_rad), outer_r * math.sin(angle_rad))
-        p4 = (inner_r * math.cos(angle_rad), inner_r * math.sin(angle_rad))
+        # Calculate all four corner points
+        p1 = (inner_r, 0)  # Inner radius, start
+        p2 = (outer_r, 0)  # Outer radius, start
+        p3 = (outer_r * math.cos(angle_rad), outer_r * math.sin(angle_rad))  # Outer radius, end
+        p4 = (inner_r * math.cos(angle_rad), inner_r * math.sin(angle_rad))  # Inner radius, end
         
-        # Draw outline
+        # Draw the segment more accurately using multiple arc segments
         path = c.beginPath()
         path.moveTo(p1[0], p1[1])
         path.lineTo(p2[0], p2[1])
-        path.arc(0, 0, outer_r, 0, angle_deg)
-        path.lineTo(p4[0], p4[1])
-        path.arcTo(p4[0], p4[1], p1[0], p1[1], inner_r)
-        c.drawPath(path)
         
-        # Dimensions
-        c.setFont("Helvetica", 7)
+        # Draw outer arc using multiple segments for better accuracy
+        num_segments = max(int(angle_deg / 5), 10)  # More segments for larger angles
+        for i in range(num_segments + 1):
+            theta = (angle_rad * i) / num_segments
+            x = outer_r * math.cos(theta)
+            y = outer_r * math.sin(theta)
+            if i == 0:
+                path.moveTo(x, y)
+            else:
+                path.lineTo(x, y)
+        
+        # Draw the radial line at the end
+        path.lineTo(p4[0], p4[1])
+        
+        # Draw inner arc (in reverse)
+        for i in range(num_segments, -1, -1):
+            theta = (angle_rad * i) / num_segments
+            x = inner_r * math.cos(theta)
+            y = inner_r * math.sin(theta)
+            path.lineTo(x, y)
+        
+        # Close the path
+        path.close()
+        c.drawPath(path, stroke=1, fill=0)
+        
+        # Draw dimension lines and annotations
+        c.setFont("Helvetica", 8)
         c.setStrokeColor(red)
         c.setLineWidth(0.5)
         
-        # Radii
-        c.drawString(-25, -inner_r - 8, f"R{geometry['inner_radius']:.0f}")
-        c.drawString(-25, -outer_r - 8, f"R{geometry['outer_radius']:.0f}")
+        # Inner radius dimension
+        c.setDash([2, 2])
+        c.line(0, 0, inner_r, 0)
+        c.setDash([])
+        c.drawString(inner_r/2 - 15, -10, f"R{geometry['inner_radius']:.0f}")
         
-        # Chord
-        c.drawString(p3[0] + 5, p3[1], f"C: {geometry['outer_chord_length']:.0f}")
+        # Outer radius dimension
+        c.setDash([2, 2])
+        c.line(0, 0, outer_r, 0)
+        c.setDash([])
+        c.drawString(outer_r/2 + 10, -10, f"R{geometry['outer_radius']:.0f}")
         
-        # Arc
-        c.drawString(outer_r + 5, 0, f"A: {geometry['outer_arc_length']:.0f}")
+        # Chord dimension (outer)
+        c.setDash([2, 2])
+        c.line(p2[0], p2[1], p3[0], p3[1])
+        c.setDash([])
+        chord_mid_x = (p2[0] + p3[0]) / 2
+        chord_mid_y = (p2[1] + p3[1]) / 2
+        c.drawString(chord_mid_x - 10, chord_mid_y + 5, f"{geometry['outer_chord_length']:.0f}")
         
-        # Angle
-        c.drawString(0, outer_r + 10, f"{angle_deg:.1f}°")
+        # Arc length annotation
+        arc_label_angle = angle_rad / 2
+        arc_label_r = outer_r + 15
+        arc_label_x = arc_label_r * math.cos(arc_label_angle)
+        arc_label_y = arc_label_r * math.sin(arc_label_angle)
+        c.drawString(arc_label_x - 15, arc_label_y, f"{geometry['outer_arc_length']:.0f}")
+        
+        # Angle dimension with arc
+        c.setStrokeColor(red)
+        c.setLineWidth(0.5)
+        angle_r = inner_r * 0.3
+        angle_path = c.beginPath()
+        angle_path.arc(0, 0, angle_r, 0, angle_deg)
+        c.drawPath(angle_path)
+        
+        # Angle text
+        angle_text_angle = angle_rad / 2
+        angle_text_r = angle_r + 10
+        angle_text_x = angle_text_r * math.cos(angle_text_angle)
+        angle_text_y = angle_text_r * math.sin(angle_text_angle)
+        c.drawString(angle_text_x - 10, angle_text_y - 3, f"{angle_deg:.0f}°")
         
         # Unit ID
-        c.setFont("Helvetica-Bold", 9)
+        c.setFont("Helvetica-Bold", 10)
         c.setStrokeColor(black)
-        c.drawString(-15, -outer_r - 20, unit['id'])
+        c.drawString(-20, -outer_r - 25, unit['id'])
         
         c.restoreState()
 
