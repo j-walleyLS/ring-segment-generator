@@ -282,10 +282,11 @@ class RingSegmentGenerator:
         outer_radius = geometry['outer_radius']
         angle_deg = geometry['angle_degrees']
         angle_rad = math.radians(angle_deg)
+        half_angle = angle_rad / 2
         
         # Calculate scale to fit the space
         chord_length = geometry['outer_chord_length']
-        scale = max_size * 0.5 / max(chord_length * 1.3, outer_radius * 2)
+        scale = max_size * 0.5 / max(chord_length * 1.4, outer_radius * 2.5)
         
         # Scaled dimensions
         inner_r = inner_radius * scale
@@ -294,11 +295,11 @@ class RingSegmentGenerator:
         c.saveState()
         c.translate(x_center, y_center)
         
-        # Apply rotation to make chord horizontal
+        # Apply rotation to make chord horizontal - everything drawn after this will be rotated
         rotation_angle = (180 - angle_deg) / 2
         c.rotate(rotation_angle)
         
-        # Calculate the four corner points (in natural position)
+        # Calculate the four corner points (in natural position before rotation)
         p1_x = inner_r
         p1_y = 0
         p2_x = outer_r
@@ -336,174 +337,202 @@ class RingSegmentGenerator:
         path.close()
         c.drawPath(path, stroke=1, fill=0)
         
-        # DIMENSIONS - Clean CAD style
+        # DIMENSIONS - Draw in natural position, they'll be rotated with the segment
         c.setStrokeColor(red)
         c.setLineWidth(0.5)
         c.setFont("Helvetica", 8)
         
-        # After rotation, the chord is horizontal
-        # p2 and p3 are now the bottom (outer) points
-        # p1 and p4 are now the top (inner) points
-        
-        # Calculate rotated positions for dimension placement
-        # Since we rotated by (180-angle)/2, the end points are now symmetric
-        half_angle = angle_rad / 2
-        
-        # Bottom (outer) chord dimension
-        outer_dim_offset = 25
-        outer_left_x = -outer_r * math.sin(half_angle)
-        outer_right_x = outer_r * math.sin(half_angle)
-        outer_y = -outer_r * math.cos(half_angle)
-        
-        # Extension lines
-        c.line(outer_left_x, outer_y, outer_left_x, outer_y - outer_dim_offset - 5)
-        c.line(outer_right_x, outer_y, outer_right_x, outer_y - outer_dim_offset - 5)
-        
-        # Dimension line with arrows
-        dim_y = outer_y - outer_dim_offset
-        c.line(outer_left_x + 5, dim_y, outer_right_x - 5, dim_y)
-        
-        # Arrows
+        dim_offset = 25
         arrow_size = 3
-        c.line(outer_left_x, dim_y, outer_left_x + arrow_size, dim_y - 2)
-        c.line(outer_left_x, dim_y, outer_left_x + arrow_size, dim_y + 2)
-        c.line(outer_right_x, dim_y, outer_right_x - arrow_size, dim_y - 2)
-        c.line(outer_right_x, dim_y, outer_right_x - arrow_size, dim_y + 2)
         
-        # Text
-        c.drawString(-15, dim_y - 12, f"{geometry['outer_chord_length']:.0f}")
+        # Chord dimensions (between the two radial lines)
+        # These are perpendicular to the radial lines
         
-        # Bottom outer arc dimension
-        arc_dim_offset = 45
-        arc_dim_y = outer_y - arc_dim_offset
+        # Calculate perpendicular direction at end angle
+        perp_x = -math.sin(angle_rad)
+        perp_y = math.cos(angle_rad)
         
-        # Draw arc dimension line
+        # Outer chord dimension
+        outer_chord_offset = dim_offset
+        # Extension lines
+        c.line(p2_x, p2_y, p2_x + perp_x * (outer_chord_offset + 5), p2_y + perp_y * (outer_chord_offset + 5))
+        c.line(p3_x, p3_y, p3_x + perp_x * (outer_chord_offset + 5), p3_y + perp_y * (outer_chord_offset + 5))
+        
+        # Dimension line
+        dim_start_x = p2_x + perp_x * outer_chord_offset
+        dim_start_y = p2_y + perp_y * outer_chord_offset
+        dim_end_x = p3_x + perp_x * outer_chord_offset
+        dim_end_y = p3_y + perp_y * outer_chord_offset
+        
+        c.line(dim_start_x, dim_start_y, dim_end_x, dim_end_y)
+        
+        # Arrows pointing along the chord
+        chord_dir_x = (p3_x - p2_x) / geometry['outer_chord_length'] * scale
+        chord_dir_y = (p3_y - p2_y) / geometry['outer_chord_length'] * scale
+        
+        c.line(dim_start_x, dim_start_y, dim_start_x + chord_dir_x * arrow_size, dim_start_y + chord_dir_y * arrow_size - 1)
+        c.line(dim_start_x, dim_start_y, dim_start_x + chord_dir_x * arrow_size, dim_start_y + chord_dir_y * arrow_size + 1)
+        c.line(dim_end_x, dim_end_y, dim_end_x - chord_dir_x * arrow_size, dim_end_y - chord_dir_y * arrow_size - 1)
+        c.line(dim_end_x, dim_end_y, dim_end_x - chord_dir_x * arrow_size, dim_end_y - chord_dir_y * arrow_size + 1)
+        
+        # Text at midpoint
+        text_x = (dim_start_x + dim_end_x) / 2 + perp_x * 10
+        text_y = (dim_start_y + dim_end_y) / 2 + perp_y * 10
+        c.saveState()
+        c.translate(text_x, text_y)
+        c.rotate(math.degrees(angle_rad / 2))
+        c.drawString(-15, -3, f"{geometry['outer_chord_length']:.0f}")
+        c.restoreState()
+        
+        # Outer arc dimension
+        outer_arc_offset = outer_chord_offset + 20
+        outer_arc_text_x = (p2_x + p3_x) / 2 + perp_x * outer_arc_offset
+        outer_arc_text_y = (p2_y + p3_y) / 2 + perp_y * outer_arc_offset
+        
+        # Draw arc
         arc_path = c.beginPath()
-        arc_r = outer_r + 15
         for i in range(21):
             t = i / 20
-            angle = -half_angle + angle_rad * t
-            x = arc_r * math.sin(angle) 
-            y = -arc_r * math.cos(angle) - 15
+            angle = angle_rad * t
+            x = (outer_r + outer_chord_offset + 15) * math.cos(angle)
+            y = (outer_r + outer_chord_offset + 15) * math.sin(angle)
             if i == 0:
                 arc_path.moveTo(x, y)
             else:
                 arc_path.lineTo(x, y)
         c.drawPath(arc_path)
         
-        # Arc text
-        c.drawString(-15, arc_dim_y - 8, f"{geometry['outer_arc_length']:.0f}")
+        c.saveState()
+        c.translate(outer_arc_text_x, outer_arc_text_y)
+        c.rotate(math.degrees(angle_rad / 2))
+        c.drawString(-15, -3, f"{geometry['outer_arc_length']:.0f}")
+        c.restoreState()
         
-        # Top (inner) chord dimension
-        inner_dim_offset = 25
-        inner_left_x = -inner_r * math.sin(half_angle)
-        inner_right_x = inner_r * math.sin(half_angle)
-        inner_y = -inner_r * math.cos(half_angle)
-        
+        # Inner chord dimension
+        inner_chord_offset = -dim_offset
         # Extension lines
-        c.line(inner_left_x, inner_y, inner_left_x, inner_y + inner_dim_offset + 5)
-        c.line(inner_right_x, inner_y, inner_right_x, inner_y + inner_dim_offset + 5)
+        c.line(p1_x, p1_y, p1_x + perp_x * (inner_chord_offset - 5), p1_y + perp_y * (inner_chord_offset - 5))
+        c.line(p4_x, p4_y, p4_x + perp_x * (inner_chord_offset - 5), p4_y + perp_y * (inner_chord_offset - 5))
         
-        # Dimension line with arrows
-        inner_dim_y = inner_y + inner_dim_offset
-        c.line(inner_left_x + 5, inner_dim_y, inner_right_x - 5, inner_dim_y)
+        # Dimension line
+        inner_dim_start_x = p1_x + perp_x * inner_chord_offset
+        inner_dim_start_y = p1_y + perp_y * inner_chord_offset
+        inner_dim_end_x = p4_x + perp_x * inner_chord_offset
+        inner_dim_end_y = p4_y + perp_y * inner_chord_offset
+        
+        c.line(inner_dim_start_x, inner_dim_start_y, inner_dim_end_x, inner_dim_end_y)
         
         # Arrows
-        c.line(inner_left_x, inner_dim_y, inner_left_x + arrow_size, inner_dim_y - 2)
-        c.line(inner_left_x, inner_dim_y, inner_left_x + arrow_size, inner_dim_y + 2)
-        c.line(inner_right_x, inner_dim_y, inner_right_x - arrow_size, inner_dim_y - 2)
-        c.line(inner_right_x, inner_dim_y, inner_right_x - arrow_size, inner_dim_y + 2)
+        inner_chord_dir_x = (p4_x - p1_x) / geometry['inner_chord_length'] * scale
+        inner_chord_dir_y = (p4_y - p1_y) / geometry['inner_chord_length'] * scale
+        
+        c.line(inner_dim_start_x, inner_dim_start_y, inner_dim_start_x + inner_chord_dir_x * arrow_size, inner_dim_start_y + inner_chord_dir_y * arrow_size - 1)
+        c.line(inner_dim_start_x, inner_dim_start_y, inner_dim_start_x + inner_chord_dir_x * arrow_size, inner_dim_start_y + inner_chord_dir_y * arrow_size + 1)
+        c.line(inner_dim_end_x, inner_dim_end_y, inner_dim_end_x - inner_chord_dir_x * arrow_size, inner_dim_end_y - inner_chord_dir_y * arrow_size - 1)
+        c.line(inner_dim_end_x, inner_dim_end_y, inner_dim_end_x - inner_chord_dir_x * arrow_size, inner_dim_end_y - inner_chord_dir_y * arrow_size + 1)
         
         # Text
-        c.drawString(-15, inner_dim_y + 3, f"{geometry['inner_chord_length']:.0f}")
+        inner_text_x = (inner_dim_start_x + inner_dim_end_x) / 2 + perp_x * -10
+        inner_text_y = (inner_dim_start_y + inner_dim_end_y) / 2 + perp_y * -10
+        c.saveState()
+        c.translate(inner_text_x, inner_text_y)
+        c.rotate(math.degrees(angle_rad / 2))
+        c.drawString(-15, 3, f"{geometry['inner_chord_length']:.0f}")
+        c.restoreState()
         
-        # Top inner arc dimension
-        inner_arc_dim_offset = 45
-        inner_arc_dim_y = inner_y + inner_arc_dim_offset
+        # Inner arc dimension
+        inner_arc_offset = inner_chord_offset - 20
+        inner_arc_text_x = (p1_x + p4_x) / 2 + perp_x * inner_arc_offset
+        inner_arc_text_y = (p1_y + p4_y) / 2 + perp_y * inner_arc_offset
         
-        # Draw arc dimension line
+        # Draw arc
         arc_path = c.beginPath()
-        inner_arc_r = inner_r - 15
-        if inner_arc_r > 0:
-            for i in range(21):
-                t = i / 20
-                angle = -half_angle + angle_rad * t
-                x = inner_arc_r * math.sin(angle)
-                y = -inner_arc_r * math.cos(angle) + 15
-                if i == 0:
-                    arc_path.moveTo(x, y)
-                else:
-                    arc_path.lineTo(x, y)
-            c.drawPath(arc_path)
+        for i in range(21):
+            t = i / 20
+            angle = angle_rad * t
+            x = (inner_r + inner_chord_offset - 15) * math.cos(angle)
+            y = (inner_r + inner_chord_offset - 15) * math.sin(angle)
+            if i == 0:
+                arc_path.moveTo(x, y)
+            else:
+                arc_path.lineTo(x, y)
+        c.drawPath(arc_path)
         
-        # Arc text
-        c.drawString(-15, inner_arc_dim_y + 3, f"{geometry['inner_arc_length']:.0f}")
+        c.saveState()
+        c.translate(inner_arc_text_x, inner_arc_text_y)
+        c.rotate(math.degrees(angle_rad / 2))
+        c.drawString(-15, 3, f"{geometry['inner_arc_length']:.0f}")
+        c.restoreState()
         
-        # Left side depth dimension
-        depth_dim_offset = 30
-        depth_x = outer_left_x - depth_dim_offset
+        # Depth dimension on start radial line
+        depth_offset = -30
+        # Extension lines perpendicular to radial
+        c.line(p1_x, p1_y, p1_x + depth_offset - 5, p1_y)
+        c.line(p2_x, p2_y, p2_x + depth_offset - 5, p2_y)
         
-        # Extension lines
-        c.line(inner_left_x, inner_y, depth_x - 5, inner_y)
-        c.line(outer_left_x, outer_y, depth_x - 5, outer_y)
-        
-        # Dimension line with arrows
-        c.line(depth_x, inner_y - 5, depth_x, outer_y + 5)
+        # Dimension line
+        c.line(p1_x + depth_offset, p1_y - 3, p1_x + depth_offset, p2_y + 3)
         
         # Arrows
-        c.line(depth_x, inner_y, depth_x - 2, inner_y - arrow_size)
-        c.line(depth_x, inner_y, depth_x + 2, inner_y - arrow_size)
-        c.line(depth_x, outer_y, depth_x - 2, outer_y + arrow_size)
-        c.line(depth_x, outer_y, depth_x + 2, outer_y + arrow_size)
+        c.line(p1_x + depth_offset, p1_y, p1_x + depth_offset - 2, p1_y + arrow_size)
+        c.line(p1_x + depth_offset, p1_y, p1_x + depth_offset + 2, p1_y + arrow_size)
+        c.line(p2_x + depth_offset, p2_y, p2_x + depth_offset - 2, p2_y - arrow_size)
+        c.line(p2_x + depth_offset, p2_y, p2_x + depth_offset + 2, p2_y - arrow_size)
         
-        # Vertical text for depth
+        # Text
         c.saveState()
-        c.translate(depth_x - 8, (inner_y + outer_y) / 2)
+        c.translate(p1_x + depth_offset - 8, (p1_y + p2_y) / 2)
         c.rotate(90)
         c.drawString(-10, 3, f"{geometry['depth']:.0f}")
         c.restoreState()
         
-        # Right side radii with dashed center line
-        radius_dim_offset = 35
-        radius_x = outer_right_x + radius_dim_offset
-        
+        # Radii with center line
+        radius_offset = 30
         # Dashed center line
         c.setDash([3, 3])
-        c.line(0, 0, radius_x + 15, 0)
+        c.line(0, 0, p3_x + radius_offset + 20, p3_y)
         c.setDash([])
         
-        # Radius labels
-        c.drawString(radius_x, 5, f"R{geometry['outer_radius']:.0f}")
-        c.drawString(radius_x, -12, f"R{geometry['inner_radius']:.0f}")
+        # Labels positioned along the angled line
+        radius_text_x = p3_x + radius_offset
+        radius_text_y = p3_y
+        c.saveState()
+        c.translate(radius_text_x, radius_text_y)
+        c.rotate(math.degrees(angle_rad))
+        c.drawString(5, 8, f"R{geometry['outer_radius']:.0f}")
+        c.drawString(5, -5, f"R{geometry['inner_radius']:.0f}")
+        c.restoreState()
         
         # Angle dimension at center
         c.setFont("Helvetica", 9)
-        c.setStrokeColor(red)
-        c.setLineWidth(0.5)
+        angle_r = min(inner_r * 0.3, 25)
         
         # Draw angle arc
-        angle_r = min(inner_r * 0.25, 20)
-        angle_path = c.beginPath()
+        arc_path = c.beginPath()
         for i in range(21):
             t = i / 20
             angle = angle_rad * t
             x = angle_r * math.cos(angle)
             y = angle_r * math.sin(angle)
             if i == 0:
-                angle_path.moveTo(x, y)
+                arc_path.moveTo(x, y)
             else:
-                angle_path.lineTo(x, y)
-        c.drawPath(angle_path)
+                arc_path.lineTo(x, y)
+        c.drawPath(arc_path)
+        
+        # Draw radial lines for angle
+        c.line(0, 0, angle_r, 0)
+        c.line(0, 0, angle_r * math.cos(angle_rad), angle_r * math.sin(angle_rad))
         
         # Angle text
-        angle_text_x = angle_r * math.cos(angle_rad / 2) + 5
-        angle_text_y = angle_r * math.sin(angle_rad / 2)
-        c.drawString(angle_text_x, angle_text_y - 3, f"{angle_deg:.0f}°")
+        angle_text_x = angle_r * math.cos(half_angle) * 1.3
+        angle_text_y = angle_r * math.sin(half_angle) * 1.3
+        c.drawString(angle_text_x - 8, angle_text_y - 3, f"{angle_deg:.0f}°")
         
         # Unit ID
         c.setFont("Helvetica-Bold", 10)
         c.setStrokeColor(black)
-        c.drawString(-len(unit['id']) * 3, arc_dim_y - 25, unit['id'])
+        c.drawString((p1_x + p3_x) / 2 - 10, min(inner_dim_start_y, inner_dim_end_y) - 40, unit['id'])
         
         c.restoreState()
 
