@@ -165,11 +165,12 @@ class RingSegmentGenerator:
         # Draw title block
         RingSegmentGenerator._draw_title_block(c, page_width, page_height, project_info)
         
-        # Calculate drawing area - give more space for units
+        # Calculate drawing area
         margin = 15 * mm
         title_block_width = 150 * mm
         title_block_height = 30 * mm
         
+        # Available drawing area (excluding title block)
         drawing_width = page_width - (2 * margin) - title_block_width
         drawing_height = page_height - (2 * margin) - title_block_height
         
@@ -178,38 +179,121 @@ class RingSegmentGenerator:
         if num_units == 0:
             return None
         
-        # Optimize grid layout based on number of units
+        # Smart grid layout based on number of units and their aspect ratios
         if num_units == 1:
+            # Single unit - center it and make it large
             cols, rows = 1, 1
-        elif num_units == 2:
-            cols, rows = 2, 1
-        elif num_units <= 4:
-            cols, rows = 2, 2
-        elif num_units <= 6:
-            cols, rows = 3, 2
-        elif num_units <= 9:
-            cols, rows = 3, 3
-        else:
-            cols = min(4, math.ceil(math.sqrt(num_units)))
-            rows = math.ceil(num_units / cols)
-        
-        cell_width = drawing_width / cols
-        cell_height = drawing_height / rows
-        
-        for idx, unit in enumerate(units_data):
-            row = idx // cols
-            col = idx % cols
-            
-            # Center units in their cells
-            x_offset = margin + (col * cell_width) + (cell_width / 2)
-            y_offset = page_height - margin - (row * cell_height) - (cell_height / 2)
-            
-            # Make units larger - use more of available space
-            max_dimension = min(cell_width * 0.85, cell_height * 0.85)
+            cell_width = drawing_width * 0.7  # Use 70% of width
+            cell_height = drawing_height * 0.7  # Use 70% of height
+            # Center the single unit
+            x_offset = margin + (drawing_width - cell_width) / 2 + cell_width / 2
+            y_offset = page_height - margin - (drawing_height - cell_height) / 2 - cell_height / 2
             
             RingSegmentGenerator._draw_unit_with_dimensions(
-                c, unit, x_offset, y_offset, max_dimension
+                c, units_data[0], x_offset, y_offset, min(cell_width, cell_height)
             )
+            
+        elif num_units == 2:
+            # Two units - side by side, larger
+            cols, rows = 2, 1
+            cell_width = drawing_width / 2.2  # Slightly smaller than half for spacing
+            cell_height = drawing_height * 0.6
+            
+            for idx, unit in enumerate(units_data):
+                x_offset = margin + (idx * drawing_width / 2) + drawing_width / 4
+                y_offset = page_height - margin - drawing_height / 2
+                
+                RingSegmentGenerator._draw_unit_with_dimensions(
+                    c, unit, x_offset, y_offset, min(cell_width, cell_height)
+                )
+                
+        elif num_units == 3:
+            # Three units - triangle arrangement (2 on top, 1 on bottom)
+            positions = [
+                (0.25, 0.7),  # Top left
+                (0.75, 0.7),  # Top right
+                (0.5, 0.3),   # Bottom center
+            ]
+            cell_size = min(drawing_width / 2.5, drawing_height / 2.5)
+            
+            for idx, unit in enumerate(units_data):
+                x_offset = margin + positions[idx][0] * drawing_width
+                y_offset = page_height - margin - positions[idx][1] * drawing_height
+                
+                RingSegmentGenerator._draw_unit_with_dimensions(
+                    c, unit, x_offset, y_offset, cell_size
+                )
+                
+        elif num_units == 4:
+            # Four units - 2x2 grid with good spacing
+            cols, rows = 2, 2
+            cell_width = drawing_width / 2.3
+            cell_height = drawing_height / 2.3
+            
+            for idx, unit in enumerate(units_data):
+                row = idx // cols
+                col = idx % cols
+                
+                # Add spacing between units
+                x_offset = margin + (col * drawing_width / 2) + drawing_width / 4
+                y_offset = page_height - margin - (row * drawing_height / 2) - drawing_height / 4
+                
+                RingSegmentGenerator._draw_unit_with_dimensions(
+                    c, unit, x_offset, y_offset, min(cell_width, cell_height)
+                )
+                
+        elif num_units <= 6:
+            # 5-6 units - 3x2 grid
+            cols, rows = 3, 2
+            cell_width = drawing_width / 3.3
+            cell_height = drawing_height / 2.3
+            
+            for idx, unit in enumerate(units_data):
+                row = idx // cols
+                col = idx % cols
+                
+                x_offset = margin + (col * drawing_width / 3) + drawing_width / 6
+                y_offset = page_height - margin - (row * drawing_height / 2) - drawing_height / 4
+                
+                RingSegmentGenerator._draw_unit_with_dimensions(
+                    c, unit, x_offset, y_offset, min(cell_width, cell_height)
+                )
+                
+        elif num_units <= 9:
+            # 7-9 units - 3x3 grid
+            cols, rows = 3, 3
+            cell_width = drawing_width / 3.4
+            cell_height = drawing_height / 3.4
+            
+            for idx, unit in enumerate(units_data):
+                row = idx // cols
+                col = idx % cols
+                
+                x_offset = margin + (col * drawing_width / 3) + drawing_width / 6
+                y_offset = page_height - margin - (row * drawing_height / 3) - drawing_height / 6
+                
+                RingSegmentGenerator._draw_unit_with_dimensions(
+                    c, unit, x_offset, y_offset, min(cell_width, cell_height)
+                )
+                
+        else:
+            # More than 9 units - dynamic grid
+            cols = min(4, math.ceil(math.sqrt(num_units * 1.3)))  # Slightly wider than tall
+            rows = math.ceil(num_units / cols)
+            
+            cell_width = drawing_width / (cols + 0.5)  # Add spacing
+            cell_height = drawing_height / (rows + 0.5)
+            
+            for idx, unit in enumerate(units_data):
+                row = idx // cols
+                col = idx % cols
+                
+                x_offset = margin + (col + 0.5) * (drawing_width / cols)
+                y_offset = page_height - margin - (row + 0.5) * (drawing_height / rows)
+                
+                RingSegmentGenerator._draw_unit_with_dimensions(
+                    c, unit, x_offset, y_offset, min(cell_width, cell_height) * 0.85
+                )
         
         c.save()
         temp_pdf.close()
@@ -283,9 +367,17 @@ class RingSegmentGenerator:
         angle_deg = geometry['angle_degrees']
         angle_rad = math.radians(angle_deg)
         
-        # Calculate scale to fit the space
+        # Calculate the actual bounding box of the rotated segment
+        # The segment when rotated will have width = chord length and height based on the arc
         chord_length = geometry['outer_chord_length']
-        scale = max_size * 0.45 / max(chord_length * 1.5, outer_radius * 2.5)
+        # Height is from the chord to the top of the arc
+        segment_height = outer_radius - outer_radius * math.cos(angle_rad / 2) + (outer_radius - inner_radius)
+        
+        # Scale to fit within max_size while maintaining aspect ratio
+        # Account for the actual dimensions of the segment
+        scale_x = max_size * 0.9 / chord_length  # 90% to ensure padding
+        scale_y = max_size * 0.9 / segment_height
+        scale = min(scale_x, scale_y)  # Use the smaller scale to ensure it fits
         
         # Scaled dimensions
         inner_r = inner_radius * scale
@@ -299,7 +391,6 @@ class RingSegmentGenerator:
         c.rotate(rotation_angle)
         
         # Draw segment in natural position (0 to angle_deg)
-        # then rotation will make chord horizontal
         c.setStrokeColor(black)
         c.setLineWidth(1.5)
         
