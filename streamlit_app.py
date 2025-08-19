@@ -139,7 +139,6 @@ class RingSegmentGenerator:
         msp.add_line(p3, p4)
         
         # Save to temporary file then read back
-        # (ezdxf doesn't support direct BytesIO writing in all versions)
         with tempfile.NamedTemporaryFile(suffix='.dxf', delete=False) as tmp:
             doc.saveas(tmp.name)
             tmp_path = tmp.name
@@ -179,10 +178,9 @@ class RingSegmentGenerator:
         if num_units == 0:
             return None
         
-        # Smart grid layout based on number of units and their aspect ratios
+        # Smart grid layout based on number of units
         if num_units == 1:
-            # Single unit - center it and make it MUCH larger
-            # Use almost all available space for maximum clarity
+            # Single unit - center it and make it large
             max_dimension = min(drawing_width * 0.9, drawing_height * 0.9)
             
             # Center the single unit
@@ -196,7 +194,7 @@ class RingSegmentGenerator:
         elif num_units == 2:
             # Two units - side by side, larger
             cols, rows = 2, 1
-            cell_width = drawing_width / 2.2  # Slightly smaller than half for spacing
+            cell_width = drawing_width / 2.2
             cell_height = drawing_height * 0.6
             
             for idx, unit in enumerate(units_data):
@@ -208,7 +206,7 @@ class RingSegmentGenerator:
                 )
                 
         elif num_units == 3:
-            # Three units - triangle arrangement (2 on top, 1 on bottom)
+            # Three units - triangle arrangement
             positions = [
                 (0.25, 0.7),  # Top left
                 (0.75, 0.7),  # Top right
@@ -225,7 +223,7 @@ class RingSegmentGenerator:
                 )
                 
         elif num_units == 4:
-            # Four units - 2x2 grid with good spacing
+            # Four units - 2x2 grid
             cols, rows = 2, 2
             cell_width = drawing_width / 2.3
             cell_height = drawing_height / 2.3
@@ -234,7 +232,6 @@ class RingSegmentGenerator:
                 row = idx // cols
                 col = idx % cols
                 
-                # Add spacing between units
                 x_offset = margin + (col * drawing_width / 2) + drawing_width / 4
                 y_offset = page_height - margin - (row * drawing_height / 2) - drawing_height / 4
                 
@@ -278,10 +275,10 @@ class RingSegmentGenerator:
                 
         else:
             # More than 9 units - dynamic grid
-            cols = min(4, math.ceil(math.sqrt(num_units * 1.3)))  # Slightly wider than tall
+            cols = min(4, math.ceil(math.sqrt(num_units * 1.3)))
             rows = math.ceil(num_units / cols)
             
-            cell_width = drawing_width / (cols + 0.5)  # Add spacing
+            cell_width = drawing_width / (cols + 0.5)
             cell_height = drawing_height / (rows + 0.5)
             
             for idx, unit in enumerate(units_data):
@@ -357,7 +354,7 @@ class RingSegmentGenerator:
     
     @staticmethod
     def _draw_unit_with_dimensions(c, unit, x_center, y_center, max_size):
-        """Draw unit shape only - no dimensions."""
+        """Draw unit shape with proper centring and scaling."""
         
         geometry = unit['geometry']
         
@@ -367,26 +364,60 @@ class RingSegmentGenerator:
         angle_deg = geometry['angle_degrees']
         angle_rad = math.radians(angle_deg)
         
-        # Simple scaling based on outer radius and chord
-        # The segment's maximum extent is either the chord width or the outer radius
-        chord_length = geometry['outer_chord_length']
-        max_dimension = max(chord_length, outer_radius * 2)
+        # Calculate the actual bounding box of the segment
+        points = []
         
-        # Scale to fit within max_size - use more of the available space
-        scale = max_size * 0.95 / max_dimension  # Use 95% of available space
+        # Start and end points at both radii
+        points.append((inner_radius, 0))
+        points.append((outer_radius, 0))
+        points.append((inner_radius * math.cos(angle_rad), inner_radius * math.sin(angle_rad)))
+        points.append((outer_radius * math.cos(angle_rad), outer_radius * math.sin(angle_rad)))
+        
+        # Check extrema points if angle crosses them
+        if angle_deg > 90:
+            points.append((0, inner_radius))
+            points.append((0, outer_radius))
+        
+        if angle_deg > 180:
+            points.append((-inner_radius, 0))
+            points.append((-outer_radius, 0))
+        
+        if angle_deg > 270:
+            points.append((0, -inner_radius))
+            points.append((0, -outer_radius))
+        
+        # Find actual bounds
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        
+        segment_width = max_x - min_x
+        segment_height = max_y - min_y
+        
+        # Calculate scale to fit in available space
+        scale_x = max_size * 0.8 / segment_width if segment_width > 0 else 1
+        scale_y = max_size * 0.8 / segment_height if segment_height > 0 else 1
+        scale = min(scale_x, scale_y)
+        
+        # Calculate centre offset of the segment's bounding box
+        bbox_center_x = (min_x + max_x) / 2
+        bbox_center_y = (min_y + max_y) / 2
         
         # Scaled dimensions
         inner_r = inner_radius * scale
         outer_r = outer_radius * scale
         
         c.saveState()
+        
+        # Translate to the target centre
         c.translate(x_center, y_center)
         
-        # Rotate to make chord horizontal
-        rotation_angle = (180 - angle_deg) / 2
-        c.rotate(rotation_angle)
+        # Offset to centre the segment's bounding box
+        c.translate(-bbox_center_x * scale, -bbox_center_y * scale)
         
-        # Draw segment in natural position (0 to angle_deg)
+        # Draw segment
         c.setStrokeColor(black)
         c.setLineWidth(1.5)
         
@@ -399,7 +430,7 @@ class RingSegmentGenerator:
         path.lineTo(outer_r, 0)
         
         # Outer arc from 0 to angle_deg
-        num_segments = 40
+        num_segments = max(20, int(angle_deg / 5))
         for i in range(num_segments + 1):
             t = i / num_segments
             current_angle = angle_rad * t
@@ -423,17 +454,55 @@ class RingSegmentGenerator:
         path.close()
         c.drawPath(path, stroke=1, fill=0)
         
-        # Unit ID in center of segment
-        c.setFont("Helvetica-Bold", 12)  # Larger font for larger segments
-        c.setStrokeColor(black)
+        # Draw dimensions if single unit
+        if scale > max_size * 0.7 / max(segment_width, segment_height):
+            c.setFont("Helvetica", 8)
+            c.setStrokeColor(red)
+            c.setLineWidth(0.5)
+            
+            # Inner radius dimension
+            dim_offset = 15
+            c.line(0, -dim_offset, inner_r, -dim_offset)
+            c.drawString(inner_r / 2 - 20, -dim_offset - 10, f"R{geometry['inner_radius']:.0f}")
+            
+            # Outer radius dimension
+            c.line(0, outer_r + dim_offset, outer_r, outer_r + dim_offset)
+            c.drawString(outer_r / 2 - 20, outer_r + dim_offset + 3, f"R{geometry['outer_radius']:.0f}")
+            
+            # Angle dimension
+            angle_r = (inner_r + outer_r) / 2
+            arc_points = 10
+            for i in range(arc_points):
+                t1 = i / arc_points * angle_rad
+                t2 = (i + 1) / arc_points * angle_rad
+                c.line(angle_r * math.cos(t1), angle_r * math.sin(t1),
+                       angle_r * math.cos(t2), angle_r * math.sin(t2))
+            
+            # Angle text
+            mid_angle = angle_rad / 2
+            text_x = (angle_r + 10) * math.cos(mid_angle)
+            text_y = (angle_r + 10) * math.sin(mid_angle)
+            c.drawString(text_x - 15, text_y - 3, f"{angle_deg:.1f}°")
+            
+            # Chord length dimension
+            chord_y = -dim_offset - 25
+            c.line(inner_r, chord_y, end_inner_x, chord_y)
+            chord_mid_x = (inner_r + end_inner_x) / 2
+            c.drawString(chord_mid_x - 30, chord_y - 10, f"Chord: {geometry['outer_chord_length']:.0f}")
         
-        # Center at half angle and middle radius
+        # Unit ID - properly centred
+        c.setFont("Helvetica-Bold", 12 if scale > max_size * 0.5 / max(segment_width, segment_height) else 10)
+        c.setFillColor(black)
+        
+        # Calculate geometric centre of the segment
         center_angle = angle_rad / 2
         center_radius = (inner_r + outer_r) / 2
         center_x = center_radius * math.cos(center_angle)
         center_y = center_radius * math.sin(center_angle)
         
-        c.drawString(center_x - len(unit['id']) * 4, center_y - 4, unit['id'])
+        # Draw unit ID
+        text_width = len(unit['id']) * 6
+        c.drawString(center_x - text_width / 2, center_y - 4, unit['id'])
         
         c.restoreState()
 
