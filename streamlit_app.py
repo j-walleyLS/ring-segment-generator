@@ -364,51 +364,45 @@ class RingSegmentGenerator:
         angle_deg = geometry['angle_degrees']
         angle_rad = math.radians(angle_deg)
         
-        # For a segment with chord horizontal:
-        # The chord width is the key dimension
+        # Calculate the actual dimensions when chord is horizontal
         chord_length = geometry['outer_chord_length']
         
-        # The height is from the chord to the top of the outer arc
-        # This is outer_radius - outer_radius * cos(angle/2)
-        segment_height = outer_radius - outer_radius * math.cos(angle_rad / 2)
-        
-        # For scaling, use the chord length as width
-        segment_width = chord_length
+        # Height from chord line to top of outer arc
+        # The segment extends from 0 to angle_deg
+        # When rotated to make chord horizontal, the height is the maximum y-extent
+        segment_height = outer_radius * (1 - math.cos(angle_rad / 2))
         
         # Calculate scale to fit in available space
-        scale_x = max_size * 0.85 / segment_width if segment_width > 0 else 1
-        scale_y = max_size * 0.85 / segment_height if segment_height > 0 else 1
+        scale_x = max_size * 0.8 / chord_length if chord_length > 0 else 1
+        scale_y = max_size * 0.8 / segment_height if segment_height > 0 else 1
         scale = min(scale_x, scale_y)
         
         # Scaled dimensions
         inner_r = inner_radius * scale
         outer_r = outer_radius * scale
+        scaled_chord = chord_length * scale
+        scaled_height = segment_height * scale
         
         c.saveState()
         
         # Move to target position
         c.translate(x_center, y_center)
         
-        # We want the segment centred with chord horizontal
-        # First rotate so chord is horizontal (segment symmetric about vertical)
+        # Rotate so chord is horizontal
         rotation_angle = 90 - angle_deg / 2
         c.rotate(rotation_angle)
         
-        # Now we need to offset so the segment is centred
-        # After rotation, the segment extends from -chord/2 to +chord/2 horizontally
-        # Vertically, it extends from the chord line up to the arc peak
-        # We want to centre this in our space
+        # After rotation, the segment needs to be centred
+        # The segment's chord runs from (-chord/2, y) to (chord/2, y)
+        # We need to shift it so it's centred at origin
+        # The y-offset should place the visual centre at origin
         
-        # The vertical centre of the rotated segment is at:
-        # (distance from chord to inner arc + distance from chord to outer arc) / 2
-        # Distance from chord to outer arc = outer_radius - outer_radius * cos(angle/2)
-        # Distance from chord to inner arc = inner_radius - inner_radius * cos(angle/2)
+        # Calculate the centroid height of the segment (approximation)
+        # For a circular segment, the centroid is not at geometric centre
+        # We'll use a simplified offset that visually centres it
+        y_offset = -outer_r * (1 - math.cos(angle_rad / 2)) / 2
         
-        outer_height = outer_r - outer_r * math.cos(angle_rad / 2)
-        inner_height = inner_r - inner_r * math.cos(angle_rad / 2)
-        vertical_center = -(outer_height + inner_height) / 2
-        
-        c.translate(0, vertical_center)
+        c.translate(0, y_offset)
         
         # Draw segment
         c.setStrokeColor(black)
@@ -448,7 +442,7 @@ class RingSegmentGenerator:
         c.drawPath(path, stroke=1, fill=0)
         
         # Unit ID - properly centred
-        c.setFont("Helvetica-Bold", 12 if scale > max_size * 0.5 / segment_width else 10)
+        c.setFont("Helvetica-Bold", 12)
         c.setFillColor(black)
         
         # Calculate geometric centre of the segment
