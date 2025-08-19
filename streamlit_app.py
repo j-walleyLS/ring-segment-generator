@@ -367,7 +367,8 @@ class RingSegmentGenerator:
         # Calculate rotation needed to make chord horizontal
         # The chord connects points at angle 0 and angle_deg
         # We want to rotate so the chord is horizontal with outer arc on top
-        rotation_angle = 90 + angle_deg / 2  # Centre the segment with chord horizontal
+        # The midpoint of the chord should be at the bottom, so we rotate by 90 - half the angle
+        rotation_angle = 90 - angle_deg / 2  # This puts the chord horizontal at the bottom
         
         # Calculate the segment's bounding box AFTER rotation
         # We need to transform all key points
