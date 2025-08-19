@@ -181,17 +181,13 @@ class RingSegmentGenerator:
         
         # Smart grid layout based on number of units and their aspect ratios
         if num_units == 1:
-            # Single unit - center it and make it much larger
-            cols, rows = 1, 1
-            # Use most of the available space for a single unit
-            cell_width = drawing_width * 0.85  # Use 85% of width
-            cell_height = drawing_height * 0.85  # Use 85% of height
+            # Single unit - center it and make it MUCH larger
+            # Use almost all available space for maximum clarity
+            max_dimension = min(drawing_width * 0.9, drawing_height * 0.9)
+            
             # Center the single unit
             x_offset = margin + drawing_width / 2
             y_offset = page_height - margin - drawing_height / 2
-            
-            # For single unit, use larger scale
-            max_dimension = min(cell_width, cell_height) * 1.2
             
             RingSegmentGenerator._draw_unit_with_dimensions(
                 c, units_data[0], x_offset, y_offset, max_dimension
@@ -376,8 +372,8 @@ class RingSegmentGenerator:
         chord_length = geometry['outer_chord_length']
         max_dimension = max(chord_length, outer_radius * 2)
         
-        # Scale to fit within max_size with padding
-        scale = max_size * 0.8 / max_dimension
+        # Scale to fit within max_size - use more of the available space
+        scale = max_size * 0.95 / max_dimension  # Use 95% of available space
         
         # Scaled dimensions
         inner_r = inner_radius * scale
@@ -428,7 +424,7 @@ class RingSegmentGenerator:
         c.drawPath(path, stroke=1, fill=0)
         
         # Unit ID in center of segment
-        c.setFont("Helvetica-Bold", 10)
+        c.setFont("Helvetica-Bold", 12)  # Larger font for larger segments
         c.setStrokeColor(black)
         
         # Center at half angle and middle radius
@@ -437,7 +433,7 @@ class RingSegmentGenerator:
         center_x = center_radius * math.cos(center_angle)
         center_y = center_radius * math.sin(center_angle)
         
-        c.drawString(center_x - len(unit['id']) * 3, center_y - 3, unit['id'])
+        c.drawString(center_x - len(unit['id']) * 4, center_y - 4, unit['id'])
         
         c.restoreState()
 
