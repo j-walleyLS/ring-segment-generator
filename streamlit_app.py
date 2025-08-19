@@ -367,17 +367,13 @@ class RingSegmentGenerator:
         angle_deg = geometry['angle_degrees']
         angle_rad = math.radians(angle_deg)
         
-        # Calculate the actual bounding box of the rotated segment
-        # The segment when rotated will have width = chord length and height based on the arc
+        # Simple scaling based on outer radius and chord
+        # The segment's maximum extent is either the chord width or the outer radius
         chord_length = geometry['outer_chord_length']
-        # Height is from the chord to the top of the arc
-        segment_height = outer_radius - outer_radius * math.cos(angle_rad / 2) + (outer_radius - inner_radius)
+        max_dimension = max(chord_length, outer_radius * 2)
         
-        # Scale to fit within max_size while maintaining aspect ratio
-        # Account for the actual dimensions of the segment
-        scale_x = max_size * 0.9 / chord_length  # 90% to ensure padding
-        scale_y = max_size * 0.9 / segment_height
-        scale = min(scale_x, scale_y)  # Use the smaller scale to ensure it fits
+        # Scale to fit within max_size with padding
+        scale = max_size * 0.8 / max_dimension
         
         # Scaled dimensions
         inner_r = inner_radius * scale
