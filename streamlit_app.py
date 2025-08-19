@@ -364,31 +364,38 @@ class RingSegmentGenerator:
         angle_deg = geometry['angle_degrees']
         angle_rad = math.radians(angle_deg)
         
-        # Calculate the actual bounding box of the segment
-        points = []
+        # Calculate rotation needed to make chord horizontal
+        # The chord connects points at angle 0 and angle_deg
+        # We want to rotate so the chord is horizontal with outer arc on top
+        rotation_angle = 90 + angle_deg / 2  # Centre the segment with chord horizontal
         
-        # Start and end points at both radii
-        points.append((inner_radius, 0))
-        points.append((outer_radius, 0))
-        points.append((inner_radius * math.cos(angle_rad), inner_radius * math.sin(angle_rad)))
-        points.append((outer_radius * math.cos(angle_rad), outer_radius * math.sin(angle_rad)))
+        # Calculate the segment's bounding box AFTER rotation
+        # We need to transform all key points
+        points_original = [
+            (inner_radius, 0),
+            (outer_radius, 0),
+            (inner_radius * math.cos(angle_rad), inner_radius * math.sin(angle_rad)),
+            (outer_radius * math.cos(angle_rad), outer_radius * math.sin(angle_rad))
+        ]
         
-        # Check extrema points if angle crosses them
-        if angle_deg > 90:
-            points.append((0, inner_radius))
-            points.append((0, outer_radius))
+        # Add arc extrema points if needed
+        for check_angle in [90, 180, 270]:
+            if angle_deg > check_angle:
+                check_rad = math.radians(check_angle)
+                points_original.append((inner_radius * math.cos(check_rad), inner_radius * math.sin(check_rad)))
+                points_original.append((outer_radius * math.cos(check_rad), outer_radius * math.sin(check_rad)))
         
-        if angle_deg > 180:
-            points.append((-inner_radius, 0))
-            points.append((-outer_radius, 0))
+        # Rotate all points
+        rot_rad = math.radians(rotation_angle)
+        points_rotated = []
+        for x, y in points_original:
+            x_rot = x * math.cos(rot_rad) - y * math.sin(rot_rad)
+            y_rot = x * math.sin(rot_rad) + y * math.cos(rot_rad)
+            points_rotated.append((x_rot, y_rot))
         
-        if angle_deg > 270:
-            points.append((0, -inner_radius))
-            points.append((0, -outer_radius))
-        
-        # Find actual bounds
-        xs = [p[0] for p in points]
-        ys = [p[1] for p in points]
+        # Find bounds after rotation
+        xs = [p[0] for p in points_rotated]
+        ys = [p[1] for p in points_rotated]
         
         min_x, max_x = min(xs), max(xs)
         min_y, max_y = min(ys), max(ys)
@@ -397,11 +404,11 @@ class RingSegmentGenerator:
         segment_height = max_y - min_y
         
         # Calculate scale to fit in available space
-        scale_x = max_size * 0.8 / segment_width if segment_width > 0 else 1
-        scale_y = max_size * 0.8 / segment_height if segment_height > 0 else 1
+        scale_x = max_size * 0.85 / segment_width if segment_width > 0 else 1
+        scale_y = max_size * 0.85 / segment_height if segment_height > 0 else 1
         scale = min(scale_x, scale_y)
         
-        # Calculate centre offset of the segment's bounding box
+        # Calculate centre offset of the rotated segment's bounding box
         bbox_center_x = (min_x + max_x) / 2
         bbox_center_y = (min_y + max_y) / 2
         
@@ -414,8 +421,11 @@ class RingSegmentGenerator:
         # Translate to the target centre
         c.translate(x_center, y_center)
         
-        # Offset to centre the segment's bounding box
+        # Offset to centre the rotated segment's bounding box
         c.translate(-bbox_center_x * scale, -bbox_center_y * scale)
+        
+        # Apply rotation
+        c.rotate(rotation_angle)
         
         # Draw segment
         c.setStrokeColor(black)
@@ -453,42 +463,6 @@ class RingSegmentGenerator:
         
         path.close()
         c.drawPath(path, stroke=1, fill=0)
-        
-        # Draw dimensions if single unit
-        if scale > max_size * 0.7 / max(segment_width, segment_height):
-            c.setFont("Helvetica", 8)
-            c.setStrokeColor(red)
-            c.setLineWidth(0.5)
-            
-            # Inner radius dimension
-            dim_offset = 15
-            c.line(0, -dim_offset, inner_r, -dim_offset)
-            c.drawString(inner_r / 2 - 20, -dim_offset - 10, f"R{geometry['inner_radius']:.0f}")
-            
-            # Outer radius dimension
-            c.line(0, outer_r + dim_offset, outer_r, outer_r + dim_offset)
-            c.drawString(outer_r / 2 - 20, outer_r + dim_offset + 3, f"R{geometry['outer_radius']:.0f}")
-            
-            # Angle dimension
-            angle_r = (inner_r + outer_r) / 2
-            arc_points = 10
-            for i in range(arc_points):
-                t1 = i / arc_points * angle_rad
-                t2 = (i + 1) / arc_points * angle_rad
-                c.line(angle_r * math.cos(t1), angle_r * math.sin(t1),
-                       angle_r * math.cos(t2), angle_r * math.sin(t2))
-            
-            # Angle text
-            mid_angle = angle_rad / 2
-            text_x = (angle_r + 10) * math.cos(mid_angle)
-            text_y = (angle_r + 10) * math.sin(mid_angle)
-            c.drawString(text_x - 15, text_y - 3, f"{angle_deg:.1f}°")
-            
-            # Chord length dimension
-            chord_y = -dim_offset - 25
-            c.line(inner_r, chord_y, end_inner_x, chord_y)
-            chord_mid_x = (inner_r + end_inner_x) / 2
-            c.drawString(chord_mid_x - 30, chord_y - 10, f"Chord: {geometry['outer_chord_length']:.0f}")
         
         # Unit ID - properly centred
         c.setFont("Helvetica-Bold", 12 if scale > max_size * 0.5 / max(segment_width, segment_height) else 10)
