@@ -181,16 +181,20 @@ class RingSegmentGenerator:
         
         # Smart grid layout based on number of units and their aspect ratios
         if num_units == 1:
-            # Single unit - center it and make it large
+            # Single unit - center it and make it much larger
             cols, rows = 1, 1
-            cell_width = drawing_width * 0.7  # Use 70% of width
-            cell_height = drawing_height * 0.7  # Use 70% of height
+            # Use most of the available space for a single unit
+            cell_width = drawing_width * 0.85  # Use 85% of width
+            cell_height = drawing_height * 0.85  # Use 85% of height
             # Center the single unit
-            x_offset = margin + (drawing_width - cell_width) / 2 + cell_width / 2
-            y_offset = page_height - margin - (drawing_height - cell_height) / 2 - cell_height / 2
+            x_offset = margin + drawing_width / 2
+            y_offset = page_height - margin - drawing_height / 2
+            
+            # For single unit, use larger scale
+            max_dimension = min(cell_width, cell_height) * 1.2
             
             RingSegmentGenerator._draw_unit_with_dimensions(
-                c, units_data[0], x_offset, y_offset, min(cell_width, cell_height)
+                c, units_data[0], x_offset, y_offset, max_dimension
             )
             
         elif num_units == 2:
