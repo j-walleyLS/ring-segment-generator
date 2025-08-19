@@ -282,7 +282,6 @@ class RingSegmentGenerator:
         outer_radius = geometry['outer_radius']
         angle_deg = geometry['angle_degrees']
         angle_rad = math.radians(angle_deg)
-        half_angle = angle_rad / 2
         
         # Calculate scale to fit the space
         chord_length = geometry['outer_chord_length']
@@ -295,59 +294,61 @@ class RingSegmentGenerator:
         c.saveState()
         c.translate(x_center, y_center)
         
-        # Position segment with outer chord at y=0 (horizontal baseline)
-        outer_half_chord = outer_r * math.sin(half_angle)
-        inner_half_chord = inner_r * math.sin(half_angle)
+        # Rotate to make chord horizontal
+        rotation_angle = (180 - angle_deg) / 2
+        c.rotate(rotation_angle)
         
-        # Heights from baseline
-        segment_height = outer_r - inner_r * math.cos(half_angle)
-        center_y = outer_r
-        
-        # Four corners - outer chord at y=0
-        p1 = (-inner_half_chord, segment_height)  # Inner left
-        p2 = (-outer_half_chord, 0)  # Outer left (on baseline)
-        p3 = (outer_half_chord, 0)   # Outer right (on baseline)
-        p4 = (inner_half_chord, segment_height)   # Inner right
-        
-        # Draw the segment ONLY - BLACK OUTLINE ONLY
+        # Draw segment in natural position (0 to angle_deg)
+        # then rotation will make chord horizontal
         c.setStrokeColor(black)
         c.setLineWidth(1.5)
         
         path = c.beginPath()
-        path.moveTo(p1[0], p1[1])
-        path.lineTo(p2[0], p2[1])
         
-        # Outer arc
+        # Start at inner radius, angle 0
+        path.moveTo(inner_r, 0)
+        
+        # Line to outer radius, angle 0
+        path.lineTo(outer_r, 0)
+        
+        # Outer arc from 0 to angle_deg
         num_segments = 40
         for i in range(num_segments + 1):
             t = i / num_segments
-            current_angle = math.pi + half_angle - angle_rad * t
+            current_angle = angle_rad * t
             x = outer_r * math.cos(current_angle)
-            y = center_y + outer_r * math.sin(current_angle)
+            y = outer_r * math.sin(current_angle)
             path.lineTo(x, y)
         
-        path.lineTo(p4[0], p4[1])
+        # Line to inner radius at angle_deg
+        end_inner_x = inner_r * math.cos(angle_rad)
+        end_inner_y = inner_r * math.sin(angle_rad)
+        path.lineTo(end_inner_x, end_inner_y)
         
-        # Inner arc (reverse)
+        # Inner arc from angle_deg back to 0
         for i in range(num_segments, -1, -1):
             t = i / num_segments
-            current_angle = math.pi + half_angle - angle_rad * t
+            current_angle = angle_rad * t
             x = inner_r * math.cos(current_angle)
-            y = center_y + inner_r * math.sin(current_angle)
+            y = inner_r * math.sin(current_angle)
             path.lineTo(x, y)
         
         path.close()
         c.drawPath(path, stroke=1, fill=0)
         
-        # Unit ID in center of segment - BLACK TEXT
+        # Unit ID in center of segment
         c.setFont("Helvetica-Bold", 10)
         c.setStrokeColor(black)
-        center_seg_y = (p1[1] + p2[1]) / 2
-        c.drawString(-len(unit['id']) * 3, center_seg_y, unit['id'])
+        
+        # Center at half angle and middle radius
+        center_angle = angle_rad / 2
+        center_radius = (inner_r + outer_r) / 2
+        center_x = center_radius * math.cos(center_angle)
+        center_y = center_radius * math.sin(center_angle)
+        
+        c.drawString(center_x - len(unit['id']) * 3, center_y - 3, unit['id'])
         
         c.restoreState()
-        
-        # ABSOLUTELY NO DIMENSION DRAWING CODE HERE
 
 
 # Streamlit Application
